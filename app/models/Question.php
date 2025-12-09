@@ -310,6 +310,32 @@ private function mapUserLevelToQuestionDifficulty(string $userLevel): array
 
         return true;
     }
+     // Lấy câu hỏi theo môn, lớp, trình độ, số lượng
+ public function getQuestions($subjectId, $gradeLevel = null, $difficulty = null, $limit = 20) {
+        $limit = intval($limit); // đảm bảo là số nguyên
+        $params = [];
+        $conditions = [];
 
-    
+        if ($subjectId !== null) {
+            $conditions[] = "SubjectId = ?";
+            $params[] = $subjectId;
+        }
+        if ($gradeLevel !== null) {
+            $conditions[] = "GradeLevel = ?";
+            $params[] = $gradeLevel;
+        }
+        if ($difficulty !== null) {
+            $conditions[] = "DifficultyLevel = ?";
+            $params[] = $difficulty;
+        }
+
+        $where = count($conditions) ? "WHERE " . implode(" AND ", $conditions) : "";
+
+        $sql = "SELECT * FROM Questions $where ORDER BY RAND() LIMIT $limit";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 }
+    
+

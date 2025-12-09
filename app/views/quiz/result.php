@@ -1,48 +1,24 @@
-<h2 style="text-align:center; color:#2c3e50; margin-bottom:20px;">📊 Kết quả bài thi</h2>
+<?php include ROOT_PATH . '/app/views/shares/header.php'; ?>
 
-<div style="text-align:center; margin-bottom:30px; font-size:18px; font-weight:bold;">
-    Điểm số: <span style="color:#27ae60;"><?= $_SESSION['last_score'] ?? 0 ?>%</span>
-</div>
+<h2>Kết quả bài kiểm tra: <?= htmlspecialchars($result['SubjectName']) ?></h2>
+<p>Tổng số câu hỏi: <?= $result['TotalQuestions'] ?></p>
+<p>Đúng: <?= $result['CorrectAnswers'] ?></p>
+<p>Sai: <?= $result['WrongAnswers'] ?></p>
+<p>Điểm: <?= $result['Score'] ?>/10</p>
+<p>Trình độ: <?= $result['FinalLevel'] ?></p>
 
-<?php foreach ($details as $index => $d): 
-    $options = $d['Options'] ?? [
-        'A' => $d['OptionA'] ?? '',
-        'B' => $d['OptionB'] ?? '',
-        'C' => $d['OptionC'] ?? '',
-        'D' => $d['OptionD'] ?? ''
-    ];
-    $userAnswerContent = trim((string)($d['UserAnswerContent'] ?? ''));
-    $correctAnswerContent = trim((string)($d['CorrectAnswerContent'] ?? ''));
-?>
-    <div style="margin-bottom:20px; padding:15px; border:1px solid #ddd; border-radius:8px; 
-                box-shadow:0 2px 5px rgba(0,0,0,0.05); background:#fafafa;">
-        <p style="font-weight:bold; margin-bottom:10px; color:#2c3e50;">
-            Câu <?= $index + 1 ?>: <?= htmlspecialchars($d['Content'] ?? '') ?>
-        </p>
-
-        <?php foreach ($options as $optKey => $optVal): 
-            $optValStr = trim((string)$optVal);
-            $style = '';
-            if ($optValStr === $userAnswerContent) {
-                $style = $userAnswerContent === $correctAnswerContent 
-                         ? 'background:#d4edda; color:#155724; font-weight:bold; padding:4px 8px; border-radius:5px;' 
-                         : 'background:#f8d7da; color:#721c24; font-weight:bold; padding:4px 8px; border-radius:5px;';
-            } elseif ($optValStr === $correctAnswerContent) {
-                $style = 'background:#d4edda; color:#155724; padding:4px 8px; border-radius:5px;';
-            }
-        ?>
-            <div style="margin:4px 0; <?= $style ?>">
-                <?= $optKey ?>. <?= htmlspecialchars($optVal) ?>
-            </div>
-        <?php endforeach; ?>
-    </div>
+<h3>Chi tiết câu hỏi</h3>
+<ol>
+<?php foreach ($questions as $q): ?>
+    <li>
+        <p><strong><?= htmlspecialchars($q['Content']) ?></strong></p>
+        <p>Đáp án của bạn: <?= htmlspecialchars($q['UserAnswer'] ?? '-') ?></p>
+        <p>Đáp án đúng: <?= htmlspecialchars($q['CorrectAnswer']) ?></p>
+        <p style="color: <?= $q['IsCorrect'] ? 'green' : 'red' ?>;"><?= $q['IsCorrect'] ? 'Đúng' : 'Sai' ?></p>
+    </li>
 <?php endforeach; ?>
+</ol>
 
-<div style="text-align:center; margin-top:30px;">
-    <a href="index.php?controller=User&action=index" 
-       style="display:inline-block; padding:10px 20px; background:#3498db; color:white; 
-              text-decoration:none; border-radius:8px; font-weight:bold; 
-              box-shadow:0 2px 5px rgba(0,0,0,0.15);">
-       🔄 Quay lại
-    </a>
-</div>
+<p><a href="index.php?controller=user&action=index">Quay lại trang chủ</a></p>
+
+<?php include ROOT_PATH . '/app/views/shares/footer.php'; ?>

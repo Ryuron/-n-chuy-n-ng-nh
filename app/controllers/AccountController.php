@@ -27,7 +27,8 @@ class AccountController
                         'Username' => $user['Username'],
                         'Email'    => $user['Email'],
                         'Role'     => $user['Role'],
-                        'FullName' => $user['FullName'] ?? ''
+                        'FullName' => $user['FullName'] ?? '',
+                        'GradeLevel' => $user['GradeLevel'] ?? 1
                     ]);
                     if (strtolower(trim($user['Role'])) === 'admin') {
                         // Admin -> dashboard
