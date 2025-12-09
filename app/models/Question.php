@@ -336,6 +336,7 @@ private function mapUserLevelToQuestionDifficulty(string $userLevel): array
         $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
+    
 }
     
 

@@ -18,120 +18,166 @@ class QuizController {
         $this->testModel = new Test($this->db);
         $this->levelModel = new UserSubjectLevel($this->db);
     }
+public function start() {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $userId = $_SESSION['user']['UserId'];
+        $subjectId = intval($_POST['subject_id']);
+        $gradeLevel = $_SESSION['user']['GradeLevel'] ?? 1;
 
-    // Tạo bài kiểm tra khi user chọn môn học
-    public function start() {
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $userId = $_SESSION['user']['UserId'];
-            $subjectId = intval($_POST['subject_id']);
-            $gradeLevel = $_SESSION['user']['GradeLevel'] ?? 1;
+        // Lấy trình độ hiện tại của học sinh với môn này
+        $currentLevel = $this->levelModel->getCurrentLevel($userId, $subjectId) ?? 'TB';
 
-            // Lấy trình độ hiện tại của học sinh với môn này
-            $currentLevel = $this->levelModel->getCurrentLevel($userId, $subjectId) ?? 'TB';
+        // Mapping CurrentLevel -> DifficultyLevel
+        $levelMap = ['Yếu'=>'Dễ', 'TB'=>'TB', 'Khá'=>'Khó', 'Giỏi'=>'Khó'];
+        $difficulty = $levelMap[$currentLevel] ?? 'TB';
 
-            // Mapping CurrentLevel -> DifficultyLevel
-            $levelMap = ['Yếu'=>'Dễ', 'TB'=>'TB', 'Khá'=>'Khó', 'Giỏi'=>'Khó'];
-            $difficulty = $levelMap[$currentLevel] ?? 'TB';
+        // Lấy danh sách câu hỏi cùng lớp
+        $questions = $this->questionModel->getQuestions($subjectId, $gradeLevel, $difficulty, 20);
 
-            // Lấy danh sách câu hỏi ngẫu nhiên
-            $questions = $this->questionModel->getQuestions($subjectId, $gradeLevel, $difficulty, 20);
-
-            if (!$questions) {
-                // fallback: lấy câu hỏi bất kỳ trong môn
-                $questions = $this->questionModel->getQuestions($subjectId, null, $difficulty, 20);
-                if (!$questions) {
-                    die("Không có đủ câu hỏi phù hợp.");
-                }
-            }
-
-            // Tạo bài kiểm tra mới
-            $testId = $this->testModel->createTest($userId, $subjectId, $gradeLevel, $currentLevel, $questions);
-
-            // Chuyển sang view làm bài
-            header("Location: index.php?controller=quiz&action=take&test_id=$testId");
-            exit;
+        // Nếu không có câu hỏi nào cùng lớp -> báo lỗi
+        if (!$questions) {
+            die("Không có câu hỏi nào cho môn này với lớp của bạn.");
         }
+
+        // Tạo bài kiểm tra mới
+        $testId = $this->testModel->createTest($userId, $subjectId, $gradeLevel, $currentLevel, $questions);
+
+        header("Location: index.php?controller=quiz&action=take&test_id=$testId");
+        exit;
     }
+}
 
     // Hiển thị bài kiểm tra
     public function take() {
+    $testId = intval($_GET['test_id'] ?? 0);
+    if (!$testId) die("Bài kiểm tra không tồn tại.");
+
+    $stmt = $this->db->prepare("
+        SELECT tq.*, q.Content, q.OptionA, q.OptionB, q.OptionC, q.OptionD, q.CorrectAnswer
+        FROM TestQuestions tq
+        JOIN Questions q ON tq.QuestionId = q.QuestionId
+        WHERE tq.TestId=?
+    ");
+    $stmt->execute([$testId]);
+    $questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Trộn đáp án
+    foreach ($questions as &$q) {
+        $options = [
+            $q['OptionA'],
+            $q['OptionB'],
+            $q['OptionC'],
+            $q['OptionD']
+        ];
+
+        // Trộn
+        shuffle($options);
+
+        // Gán lại các option để hiển thị
+        $q['ShuffledOptions'] = $options;
+
+        // Đảm bảo CorrectAnswer vẫn là nội dung đáp án đúng
+        // (không cần thay đổi, vì đã lưu nội dung)
+    }
+    unset($q);
+
+    require ROOT_PATH . "/app/views/quiz/take.php";
+}
+
+
+    // Nộp bài & chấm điểm
+    public function submit() {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $testId = intval($_GET['test_id'] ?? 0);
         if (!$testId) die("Bài kiểm tra không tồn tại.");
 
+        $userId = $_SESSION['user']['UserId'];
+        $answers = $_POST['answer'] ?? [];
+
+        // Lấy tất cả câu hỏi trong bài
         $stmt = $this->db->prepare("
-            SELECT tq.*, q.Content, q.OptionA, q.OptionB, q.OptionC, q.OptionD 
+            SELECT tq.TestQuestionId, tq.QuestionId, q.CorrectAnswer
             FROM TestQuestions tq
             JOIN Questions q ON tq.QuestionId = q.QuestionId
             WHERE tq.TestId=?
         ");
         $stmt->execute([$testId]);
-        $questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $testQuestions = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        require ROOT_PATH . "/app/views/quiz/take.php";
-    }
+        $correct = 0;
+        $wrong = 0;
 
-    // Nộp bài & chấm điểm
-    public function submit() {
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $testId = intval($_GET['test_id'] ?? 0);
-            if (!$testId) die("Bài kiểm tra không tồn tại.");
+        foreach ($testQuestions as $q) {
+            $userAnswer = $answers[$q['TestQuestionId']] ?? null;
+            $isCorrect = ($userAnswer === $q['CorrectAnswer']) ? 1 : 0;
 
-            $userId = $_SESSION['user']['UserId'];
-            $answers = $_POST['answer'] ?? [];
-
-            // Lấy tất cả câu hỏi trong bài
-            $stmt = $this->db->prepare("
-                SELECT tq.TestQuestionId, tq.QuestionId, q.CorrectAnswer
-                FROM TestQuestions tq
-                JOIN Questions q ON tq.QuestionId = q.QuestionId
-                WHERE tq.TestId=?
+            // Cập nhật TestQuestions
+            $update = $this->db->prepare("
+                UPDATE TestQuestions 
+                SET UserAnswer=?, IsCorrect=?, AnsweredAt=NOW()
+                WHERE TestQuestionId=?
             ");
-            $stmt->execute([$testId]);
-            $testQuestions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $update->execute([$userAnswer, $isCorrect, $q['TestQuestionId']]);
 
-            $correct = 0;
-            $wrong = 0;
-
-            foreach ($testQuestions as $q) {
-                $userAnswer = $answers[$q['TestQuestionId']] ?? null;
-                $isCorrect = ($userAnswer === $q['CorrectAnswer']) ? 1 : 0;
-
-                // Cập nhật TestQuestions
-                $update = $this->db->prepare("
-                    UPDATE TestQuestions 
-                    SET UserAnswer=?, IsCorrect=?, AnsweredAt=NOW()
-                    WHERE TestQuestionId=?
-                ");
-                $update->execute([$userAnswer, $isCorrect, $q['TestQuestionId']]);
-
-                if ($isCorrect) $correct++;
-                else $wrong++;
-            }
-
-            $total = count($testQuestions);
-            $score = round(($correct / $total) * 10, 2); // điểm trên 10
-
-            // Xác định trình độ
-            $finalLevel = ($score < 5) ? 'Yếu' : (($score < 7) ? 'TB' : (($score < 9) ? 'Khá' : 'Giỏi'));
-
-            // Cập nhật bảng Results
-            $stmt = $this->db->prepare("
-                INSERT INTO Results (TestId, UserId, SubjectId, TotalQuestions, CorrectAnswers, WrongAnswers, Score, FinalLevel)
-                SELECT t.TestId, t.UserId, t.SubjectId, ?, ?, ?, ?, ?
-                FROM Tests t WHERE t.TestId=?
-            ");
-            $stmt->execute([$total, $correct, $wrong, $score, $finalLevel, $testId]);
-
-            // Cập nhật bảng Tests
-            $updateTest = $this->db->prepare("
-                UPDATE Tests SET Score=?, CurrentLevel=?, CompletedAt=NOW() WHERE TestId=?
-            ");
-            $updateTest->execute([$score, $finalLevel, $testId]);
-
-            header("Location: index.php?controller=quiz&action=result&test_id=$testId");
-            exit;
+            if ($isCorrect) $correct++;
+            else $wrong++;
         }
+
+        $total = count($testQuestions);
+        $score = round(($correct / $total) * 10, 2); // điểm trên 10
+
+        // Xác định trình độ bài này
+        $finalLevel = ($score < 5) ? 'Yếu' : (($score < 7) ? 'TB' : (($score < 9) ? 'Khá' : 'Giỏi'));
+
+        // Cập nhật bảng Results
+        $stmt = $this->db->prepare("
+            INSERT INTO Results (TestId, UserId, SubjectId, TotalQuestions, CorrectAnswers, WrongAnswers, Score, FinalLevel)
+            SELECT t.TestId, t.UserId, t.SubjectId, ?, ?, ?, ?, ?
+            FROM Tests t WHERE t.TestId=?
+        ");
+        $stmt->execute([$total, $correct, $wrong, $score, $finalLevel, $testId]);
+
+        // Cập nhật bảng Tests
+        $updateTest = $this->db->prepare("
+            UPDATE Tests SET Score=?, CurrentLevel=?, CompletedAt=NOW() WHERE TestId=?
+        ");
+        $updateTest->execute([$score, $finalLevel, $testId]);
+
+        // --- Cập nhật ST và CurrentLevel ---
+        // Lấy thông tin level hiện tại
+        $testInfo = $this->db->prepare("SELECT SubjectId FROM Tests WHERE TestId=?");
+        $testInfo->execute([$testId]);
+        $subjectId = $testInfo->fetchColumn();
+
+        $levelInfo = $this->levelModel->getLevelInfo($userId, $subjectId);
+        $currentST = $levelInfo['ST'] ?? 0;
+        $currentLevelDB = $levelInfo['CurrentLevel'] ?? 'Yếu';
+
+        // Điều chỉnh ST dựa trên điểm
+        if ($score < 5) {
+            $currentST -= 1;
+        } elseif ($score > 7) {
+            $currentST += 1;
+        } // 5-7 giữ nguyên
+
+        $newLevel = $currentLevelDB;
+        if ($currentST >= 10) {
+            $newLevel = $this->levelModel->increaseLevel($currentLevelDB);
+            $currentST = 0;
+        } elseif ($currentST <= -10) {
+            $newLevel = $this->levelModel->decreaseLevel($currentLevelDB);
+            $currentST = 0;
+        }
+
+        // Lưu ST và CurrentLevel
+        $this->levelModel->updateSTAndLevel($userId, $subjectId, $currentST, $newLevel);
+
+        // Chuyển sang trang kết quả
+        header("Location: index.php?controller=quiz&action=result&test_id=$testId");
+        exit;
     }
+}
+
 
     // Xem kết quả bài kiểm tra
     public function result() {
@@ -158,4 +204,10 @@ class QuizController {
 
         require ROOT_PATH . "/app/views/quiz/result.php";
     }
+    public function history() {
+    $userId = $_SESSION['user']['UserId'];
+    $history = $this->testModel->getUserHistory($userId);
+    require ROOT_PATH . "/app/views/quiz/history.php";
+}
+
 }

@@ -25,4 +25,16 @@ class Test {
 
         return $testId;
     }
+    // Lấy lịch sử làm bài của user
+    public function getUserHistory($userId) {
+        $stmt = $this->db->prepare("
+            SELECT t.TestId, t.SubjectId, s.SubjectName, t.Score, t.CompletedAt, t.CurrentLevel
+            FROM Tests t
+            JOIN Subjects s ON t.SubjectId = s.SubjectId
+            WHERE t.UserId = ?
+            ORDER BY t.CompletedAt DESC
+        ");
+        $stmt->execute([$userId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 }
