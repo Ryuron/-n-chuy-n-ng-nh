@@ -634,4 +634,33 @@ class QuestionController
 
         exit();
     }
+    public function errorDetail() {
+    $id = intval($_GET['id'] ?? 0);
+    if (!$id) {
+        die("ID câu hỏi không hợp lệ.");
+    }
+
+    // Lấy nội dung câu hỏi
+    $stmt = $this->db->prepare("
+        SELECT * FROM Questions WHERE QuestionId = ?
+    ");
+    $stmt->execute([$id]);
+    $question = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$question) {
+        die("Câu hỏi không tồn tại.");
+    }
+
+    // Lấy danh sách lỗi
+    $stmt = $this->db->prepare("
+        SELECT * FROM QuestionErrorReports 
+        WHERE QuestionId = ?
+        ORDER BY CreatedAt DESC
+    ");
+    $stmt->execute([$id]);
+    $errors = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    require ROOT_PATH . '/app/views/questions/error_detail.php';
+}
+
 }

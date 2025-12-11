@@ -227,5 +227,22 @@ public function start() {
     $history = $this->testModel->getUserHistory($userId);
     require ROOT_PATH . "/app/views/quiz/history.php";
 }
+public function quickErrorReport() {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
+        $questionId = intval($_POST['question_id']);
+        $errorText = trim($_POST['error_text']);
+
+        $stmt = $this->db->prepare("
+            INSERT INTO QuestionErrorReports (QuestionId, ErrorText)
+            VALUES (?, ?)
+        ");
+        $stmt->execute([$questionId, $errorText]);
+
+        $testId = $_GET['test_id'];
+        header("Location: index.php?controller=quiz&action=result&test_id=$testId&reported=1");
+        exit;
+    }
+}
 
 }

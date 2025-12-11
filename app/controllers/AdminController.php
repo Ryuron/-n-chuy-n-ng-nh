@@ -66,4 +66,41 @@ public function delete() {
     header("Location: index.php?controller=admin&action=User");
     exit;
 }
+public function getErrorCount() {
+    $db = new PDO('mysql:host=localhost;dbname=AdaptiveQuizDB', 'root', '');
+    $stmt = $db->query("SELECT COUNT(*) FROM QuestionErrorReports WHERE IsRead = 0");
+    return $stmt->fetchColumn();
+}
+ public function errors() {
+    $db = new PDO('mysql:host=localhost;dbname=AdaptiveQuizDB', 'root', '');
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    $stmt = $db->prepare("
+        SELECT 
+            e.ErrorId, e.QuestionId, e.ErrorText, e.IsRead, e.ReportedAt,
+            q.Content,
+            q.OptionA, q.OptionB, q.OptionC, q.OptionD,
+            q.CorrectAnswer
+        FROM QuestionErrorReports e
+        JOIN Questions q ON e.QuestionId = q.QuestionId
+        ORDER BY e.ReportedAt DESC
+    ");
+    $stmt->execute();
+    $errors = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    require ROOT_PATH . "/app/views/admin/errors.php";
+}
+public function deleteError() {
+    $id = intval($_GET['id'] ?? 0);
+    if (!$id) die("Thiếu ID lỗi.");
+
+    $db = new PDO('mysql:host=localhost;dbname=AdaptiveQuizDB', 'root', '');
+    $stmt = $db->prepare("DELETE FROM QuestionErrorReports WHERE ErrorId = ?");
+    $stmt->execute([$id]);
+
+    header("Location: index.php?controller=admin&action=errors");
+    exit;
+}
+
+
 }
