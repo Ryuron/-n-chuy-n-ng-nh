@@ -108,6 +108,7 @@ public function start() {
         $wrong = 0;
 
         foreach ($testQuestions as $q) {
+
             $userAnswer = $answers[$q['TestQuestionId']] ?? null;
             $isCorrect = ($userAnswer === $q['CorrectAnswer']) ? 1 : 0;
 
@@ -119,17 +120,27 @@ public function start() {
             ");
             $update->execute([$userAnswer, $isCorrect, $q['TestQuestionId']]);
 
+            // --- NEW: Cập nhật thống kê câu hỏi ---
+            $this->db->prepare("
+                UPDATE Questions 
+                SET AnswerCount = AnswerCount + 1,
+                    CorrectCount = CorrectCount + ?
+                WHERE QuestionId = ?
+            ")->execute([$isCorrect, $q['QuestionId']]);
+
             if ($isCorrect) $correct++;
             else $wrong++;
         }
 
         $total = count($testQuestions);
-        $score = round(($correct / $total) * 10, 2); // điểm trên 10
+        $score = round(($correct / $total) * 10, 2);
 
-        // Xác định trình độ bài này
-        $finalLevel = ($score < 5) ? 'Yếu' : (($score < 7) ? 'TB' : (($score < 9) ? 'Khá' : 'Giỏi'));
+        // Xác định trình độ của bài thi
+        $finalLevel = ($score < 5) ? 'Yếu' :
+                      (($score < 7) ? 'TB' :
+                      (($score < 9) ? 'Khá' : 'Giỏi'));
 
-        // Cập nhật bảng Results
+        // Lưu kết quả vào bảng Results
         $stmt = $this->db->prepare("
             INSERT INTO Results (TestId, UserId, SubjectId, TotalQuestions, CorrectAnswers, WrongAnswers, Score, FinalLevel)
             SELECT t.TestId, t.UserId, t.SubjectId, ?, ?, ?, ?, ?
@@ -143,24 +154,30 @@ public function start() {
         ");
         $updateTest->execute([$score, $finalLevel, $testId]);
 
-        // --- Cập nhật ST và CurrentLevel ---
-        // Lấy thông tin level hiện tại
+        // =========================
+        //      UPDATE ST + LEVEL
+        // =========================
+
+        // Lấy môn của bài test
         $testInfo = $this->db->prepare("SELECT SubjectId FROM Tests WHERE TestId=?");
         $testInfo->execute([$testId]);
         $subjectId = $testInfo->fetchColumn();
 
+        // Lấy ST và CurrentLevel hiện tại
         $levelInfo = $this->levelModel->getLevelInfo($userId, $subjectId);
         $currentST = $levelInfo['ST'] ?? 0;
         $currentLevelDB = $levelInfo['CurrentLevel'] ?? 'Yếu';
 
-        // Điều chỉnh ST dựa trên điểm
+        // Tính ST mới
         if ($score < 5) {
             $currentST -= 1;
         } elseif ($score > 7) {
             $currentST += 1;
-        } // 5-7 giữ nguyên
+        }
 
+        // Xét tăng / giảm LEVEL
         $newLevel = $currentLevelDB;
+
         if ($currentST >= 10) {
             $newLevel = $this->levelModel->increaseLevel($currentLevelDB);
             $currentST = 0;
@@ -169,7 +186,7 @@ public function start() {
             $currentST = 0;
         }
 
-        // Lưu ST và CurrentLevel
+        // Lưu lại ST + Level
         $this->levelModel->updateSTAndLevel($userId, $subjectId, $currentST, $newLevel);
 
         // Chuyển sang trang kết quả
@@ -177,6 +194,7 @@ public function start() {
         exit;
     }
 }
+
 
 
     // Xem kết quả bài kiểm tra
