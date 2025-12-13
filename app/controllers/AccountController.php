@@ -106,42 +106,55 @@ class AccountController
         require 'app/views/admin/User.php';
     }
 
-    public function profile()
-    {
-        AuthHelper::requireLogin();
-        $user = SessionHelper::get('user');
-        $errors = [];
-        $success = null;
+public function profile()
+{
+    require_once ROOT_PATH . '/app/models/SubjectModel.php';
 
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $email        = trim($_POST['email'] ?? '');
-            $fullName     = trim($_POST['fullName'] ?? $user['FullName']);
-            $newPass      = $_POST['newPassword'] ?? '';
+    AuthHelper::requireLogin();
+    $user = SessionHelper::get('user');
 
-            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                $errors[] = "Email không hợp lệ.";
-            }
-            if (!$errors) {
-                $ok = $this->model->updateProfile($user['UserId'], $email, $fullName, $newPass);
-                if ($ok) {
-                    // cập nhật session
-                    $fresh = $this->model->findById($user['UserId']);
-                    SessionHelper::set('user', [
-                        'UserId'   => $fresh['UserId'],
-                        'Username' => $fresh['Username'],
-                        'Email'    => $fresh['Email'],
-                        'Role'     => $fresh['Role'],
-                        'FullName' => $fresh['FullName'] ?? ''
-                    ]);
-                    $success = "Cập nhật hồ sơ thành công.";
-                } else {
-                    $errors[] = "Không thể cập nhật hồ sơ.";
-                }
-            }
-        }
+    $subjectModel = new SubjectModel();
+    $subjects = $subjectModel->getAll();
 
-        include ROOT_PATH . "/app/views/shares/header.php";
-        include ROOT_PATH . "/app/views/account/profile.php";
-        include ROOT_PATH . "/app/views/shares/footer.php";
+    $selectedSubjectId = $_GET['subject_id'] ?? null;
+    $currentLevel = null;
+
+    if ($selectedSubjectId) {
+        $stmt = $this->model->getDB()->prepare("
+            SELECT CurrentLevel 
+            FROM usersubjectlevel 
+            WHERE UserId = ? AND SubjectId = ?
+        ");
+        $stmt->execute([$user['UserId'], $selectedSubjectId]);
+        $currentLevel = $stmt->fetchColumn();
     }
+
+    include ROOT_PATH . "/app/views/shares/header.php";
+    include ROOT_PATH . "/app/views/account/profile.php";
+    include ROOT_PATH . "/app/views/shares/footer.php";
+}
+public function getSubjectLevel()
+{
+    AuthHelper::requireLogin();
+    $user = SessionHelper::get('user');
+
+    $subjectId = $_GET['subject_id'] ?? null;
+    if (!$subjectId) {
+        echo json_encode(['level' => null]);
+        return;
+    }
+
+    $stmt = Database::getInstance()->prepare("
+        SELECT CurrentLevel
+        FROM usersubjectlevel
+        WHERE UserId = ? AND SubjectId = ?
+    ");
+    $stmt->execute([$user['UserId'], $subjectId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    echo json_encode([
+        'level' => $row['CurrentLevel'] ?? 'Chưa có'
+    ]);
+}
+
 }

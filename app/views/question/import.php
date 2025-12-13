@@ -158,6 +158,29 @@
                 <input type="file" name="question_file" accept=".csv,.docx" required>
             </div>
 
+<div class="form-group">
+    <label>Chọn môn học (áp dụng nếu file không có):</label>
+    <select name="default_subject_id" style="width:100%; padding:10px;">
+        <option value="">-- Lấy theo file --</option>
+        <?php foreach ($subjects as $s): ?>
+            <option value="<?= $s['SubjectId'] ?>">
+                <?= htmlspecialchars($s['SubjectName']) ?>
+            </option>
+        <?php endforeach; ?>
+    </select>
+</div>
+
+<div class="form-group">
+    <label>Chọn khối lớp (áp dụng nếu file không có):</label>
+    <select name="default_grade_level" style="width:100%; padding:10px;">
+        <option value="">-- Lấy theo file --</option>
+        <?php for ($i = 1; $i <= 12; $i++): ?>
+            <option value="<?= $i ?>">Lớp <?= $i ?></option>
+        <?php endfor; ?>
+    </select>
+</div>
+
+
             <button type="submit" class="btn">📤 Tải lên và nhập câu hỏi</button>
             <a href="index.php?controller=question&action=index" class="btn btn-secondary">← Quay lại</a>
         </form>
@@ -174,9 +197,7 @@
                 <li><strong>Cột 4:</strong> Đáp án C</li>
                 <li><strong>Cột 5:</strong> Đáp án D</li>
                 <li><strong>Cột 6:</strong> Đáp án đúng (A/B/C/D hoặc nội dung đầy đủ)</li>
-                <li><strong>Cột 7:</strong> Mã môn học (SubjectId - số nguyên)</li>
-                <li><strong>Cột 8:</strong> Khối lớp (1-12)</li>
-                <li><strong>Cột 9:</strong> Độ khó (Dễ/TB/Khó)</li>
+
             </ol>
 
             <h4>Ví dụ:</h4>
@@ -189,9 +210,7 @@
                         <th>C</th>
                         <th>D</th>
                         <th>Đáp án</th>
-                        <th>Môn</th>
-                        <th>Lớp</th>
-                        <th>Độ khó</th>
+
                     </tr>
                 </thead>
                 <tbody>
@@ -202,9 +221,7 @@
                         <td>5</td>
                         <td>6</td>
                         <td>B</td>
-                        <td>1</td>
-                        <td>1</td>
-                        <td>Dễ</td>
+                        
                     </tr>
                     <tr>
                         <td>Thủ đô Việt Nam?</td>
@@ -213,9 +230,7 @@
                         <td>Đà Nẵng</td>
                         <td>Huế</td>
                         <td>Hà Nội</td>
-                        <td>2</td>
-                        <td>3</td>
-                        <td>Dễ</td>
+
                     </tr>
                 </tbody>
             </table>
@@ -227,21 +242,20 @@
                 A. Đáp án A<br>
                 B. Đáp án B<br>
                 C. Đáp án C<br>
-                D. Đáp án D<br>
+                D. Đáp án D<br>s
                 Đáp án: B<br>
-                Môn: 1<br>
-                Lớp: 5<br>
-                Độ khó: Dễ<br>
+
                 <br>
                 <strong>Câu hỏi tiếp theo?</strong><br>
                 A. Đáp án A<br>
                 ...
+                
             </div>
 
             <h4 style="margin-top: 20px;">📊 Định dạng 3: Word dạng bảng (Tab-separated)</h4>
             <p>Trong Word, tạo bảng 9 cột hoặc dùng Tab để phân cách:</p>
             <div style="background: #f5f5f5; padding: 15px; border-radius: 4px; font-family: monospace; margin: 10px 0; font-size: 12px;">
-                Câu hỏi [TAB] A [TAB] B [TAB] C [TAB] D [TAB] Đáp án [TAB] Môn [TAB] Lớp [TAB] Độ khó
+                Câu hỏi [TAB] A [TAB] B [TAB] C [TAB] D [TAB] Đáp án
             </div>
 
             <a href="index.php?controller=question&action=downloadTemplate" class="download-template">

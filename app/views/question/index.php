@@ -1,5 +1,10 @@
 <h2 style="text-align:center; color:#2c3e50;">📋 Danh sách câu hỏi</h2>
-
+<div style="margin-top:20px;">
+    <a href="index.php?controller=admin&action=index"
+        style="display:inline-block; padding:10px 15px; background:#7f8c8d; color:white; text-decoration:none; border-radius:6px;">
+        ← Quay lại trang quản trị
+    </a>
+</div>
 <div style="margin-bottom:15px; text-align:right;">
     <a href="index.php?controller=question&action=create"
         style="background:#27ae60; color:white; padding:8px 12px; border-radius:6px; text-decoration:none; margin-right:10px;">
@@ -8,6 +13,14 @@
     <a href="index.php?controller=question&action=import"
         style="background:#3498db; color:white; padding:8px 12px; border-radius:6px; text-decoration:none;">
         📁 Nhập từ file
+    </a> 
+    <a href="index.php?controller=fact&action=index"
+        style="background:#9b59b6; color:white; padding:8px 12px; border-radius:6px; text-decoration:none;">
+        📊 Dữ kiện
+    </a>
+        <a href="index.php?controller=question&action=previewDifficulty"
+        style="background:#e67e22; color:white; padding:8px 12px; border-radius:6px;">
+        📈 Điều chỉnh độ khó
     </a>
 </div>
 

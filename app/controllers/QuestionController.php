@@ -87,87 +87,103 @@ class QuestionController
     /**
      * Hiển thị form import câu hỏi từ file
      */
-    public function import()
-    {
-        require 'app/views/question/import.php';
-    }
+ public function import()
+{
+    $subjects = $this->subjectModel->getAll();
+    require 'app/views/question/import.php';
+}
+
 
     /**
      * Xử lý upload và import câu hỏi từ file
      */
     public function processImport()
-    {
-        if (!isset($_FILES['question_file']) || $_FILES['question_file']['error'] !== UPLOAD_ERR_OK) {
-            $_SESSION['import_error'] = 'Vui lòng chọn file để upload';
-            header("Location: index.php?controller=question&action=import");
-            exit();
-        }
-
-        $file = $_FILES['question_file'];
-        $fileName = $file['name'];
-        $fileTmp = $file['tmp_name'];
-        $fileExt = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
-
-        // Kiểm tra định dạng file
-        $allowedExt = ['csv', 'docx'];
-        if (!in_array($fileExt, $allowedExt)) {
-            $_SESSION['import_error'] = 'Chỉ chấp nhận file CSV hoặc Word (.csv, .docx). File Excel vui lòng chuyển sang CSV trước khi upload.';
-            header("Location: index.php?controller=question&action=import");
-            exit();
-        }
-
-        try {
-            // Đọc dữ liệu từ file
-            if ($fileExt === 'csv') {
-                $questions = $this->parseCSV($fileTmp);
-            } elseif ($fileExt === 'docx') {
-                $questions = $this->parseWord($fileTmp);
-            } else {
-                throw new Exception('Định dạng file không được hỗ trợ');
-            }
-
-            if (empty($questions)) {
-                $_SESSION['import_error'] = 'File không có dữ liệu hoặc định dạng không đúng';
-                header("Location: index.php?controller=question&action=import");
-                exit();
-            }
-
-            // Thêm câu hỏi vào database
-            $result = $this->questionModel->bulkInsert($questions);
-
-            // Tạo thông báo kết quả
-            $message = "Đã thêm thành công {$result['success']} câu hỏi.";
-            if ($result['failed'] > 0) {
-                $message .= " Có {$result['failed']} câu hỏi thất bại.";
-                if (!empty($result['errors'])) {
-                    $message .= "<br><br><strong>Chi tiết lỗi:</strong><br>" . implode("<br>", array_slice($result['errors'], 0, 10));
-                    if (count($result['errors']) > 10) {
-                        $message .= "<br>... và " . (count($result['errors']) - 10) . " lỗi khác";
-                    }
-                }
-            }
-
-            if ($result['success'] > 0) {
-                $_SESSION['import_success'] = $message;
-            } else {
-                $_SESSION['import_error'] = $message;
-            }
-
-            header("Location: index.php?controller=question&action=import");
-            exit();
-        } catch (Exception $e) {
-            $_SESSION['import_error'] = 'Lỗi xử lý file: ' . $e->getMessage();
-            header("Location: index.php?controller=question&action=import");
-            exit();
-        }
+{
+    // 1. Kiểm tra file upload
+    if (!isset($_FILES['question_file']) || $_FILES['question_file']['error'] !== UPLOAD_ERR_OK) {
+        $_SESSION['import_error'] = 'Vui lòng chọn file để upload';
+        header("Location: index.php?controller=question&action=import");
+        exit();
     }
+
+    // 2. Lấy default môn & lớp (BẮT BUỘC)
+    $defaultSubjectId = $_POST['default_subject_id'] ?? null;
+    $defaultGrade     = $_POST['default_grade_level'] ?? null;
+
+    if (empty($defaultSubjectId) || empty($defaultGrade)) {
+        $_SESSION['import_error'] = 'Vui lòng chọn môn học và khối lớp';
+        header("Location: index.php?controller=question&action=import");
+        exit();
+    }
+
+    // 3. Thông tin file
+    $file     = $_FILES['question_file'];
+    $fileTmp  = $file['tmp_name'];
+    $fileExt  = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+
+    // 4. Kiểm tra định dạng
+    if (!in_array($fileExt, ['csv', 'docx'])) {
+        $_SESSION['import_error'] = 'Chỉ chấp nhận file CSV hoặc Word (.docx)';
+        header("Location: index.php?controller=question&action=import");
+        exit();
+    }
+
+    try {
+        // 5. Parse file
+        if ($fileExt === 'csv') {
+            $questions = $this->parseCSV($fileTmp);
+        } else {
+            $questions = $this->parseWord($fileTmp);
+        }
+
+        if (empty($questions)) {
+            throw new Exception('File không có dữ liệu hoặc định dạng không đúng');
+        }
+
+        // 6. Gán môn + lớp + tính độ khó
+        foreach ($questions as &$q) {
+            $q['subjectId']  = (int)$defaultSubjectId;
+            $q['gradeLevel'] = (int)$defaultGrade;
+
+            $q['difficultyLevel'] = $this->calculateDifficulty(
+                $q['content'],
+                $q['subjectId']
+            );
+            
+        }
+        unset($q);
+
+        // 7. Insert DB
+        $result = $this->questionModel->bulkInsert($questions);
+
+        // 8. Thông báo
+        $message = "Đã thêm thành công {$result['success']} câu hỏi.";
+        if ($result['failed'] > 0) {
+            $message .= " Có {$result['failed']} câu hỏi thất bại.";
+            if (!empty($result['errors'])) {
+                $message .= "<br><br><strong>Chi tiết lỗi:</strong><br>"
+                         . implode("<br>", array_slice($result['errors'], 0, 10));
+            }
+        }
+
+        $_SESSION[$result['success'] > 0 ? 'import_success' : 'import_error'] = $message;
+        header("Location: index.php?controller=question&action=import");
+        exit();
+
+    } catch (Exception $e) {
+        $_SESSION['import_error'] = 'Lỗi xử lý file: ' . $e->getMessage();
+        header("Location: index.php?controller=question&action=import");
+        exit();
+    }
+}
+
 
     /**
      * Parse file CSV
      * @param string $filePath Đường dẫn file
      * @return array Mảng các câu hỏi
      */
-    private function parseCSV($filePath)
+private function parseCSV($filePath, $defaultSubjectId = null, $defaultGrade = null)
     {
         $questions = [];
 
@@ -221,9 +237,8 @@ class QuestionController
                     'optionC' => trim($data[3]),
                     'optionD' => trim($data[4]),
                     'correctAnswer' => $correctAnswer,
-                    'subjectId' => (int)trim($data[6]),
-                    'gradeLevel' => (int)trim($data[7]),
-                    'difficultyLevel' => trim($data[8])
+                    'subjectId' => !empty($data[6]) ? (int)$data[6] : (int)$defaultSubjectId,
+                    'gradeLevel' => !empty($data[7]) ? (int)$data[7] : (int)$defaultGrade,
                 ];
             }
             fclose($handle);
@@ -248,69 +263,53 @@ class QuestionController
      * @param string $filePath Đường dẫn file
      * @return array Mảng các câu hỏi
      */
-    private function parseWord($filePath)
-    {
-        $questions = [];
-
-        // Xử lý file .docx (định dạng ZIP chứa XML)
-        if (!class_exists('ZipArchive')) {
-            throw new Exception('ZipArchive không được cài đặt. Vui lòng dùng file CSV.');
-        }
-
-        $zip = new ZipArchive();
-        $openResult = $zip->open($filePath);
-
-        if ($openResult !== true) {
-            throw new Exception('Không thể mở file .docx. Mã lỗi: ' . $openResult);
-        }
-
-        $content = $zip->getFromName('word/document.xml');
-        $zip->close();
-
-        if (!$content) {
-            throw new Exception('Không tìm thấy nội dung trong file .docx');
-        }
-
-        // Parse XML để lấy text
-        libxml_use_internal_errors(true);
-        $xml = simplexml_load_string($content);
-
-        if ($xml === false) {
-            $errors = libxml_get_errors();
-            libxml_clear_errors();
-            throw new Exception('Lỗi parse XML: ' . ($errors[0]->message ?? 'Unknown'));
-        }
-
-        $xml->registerXPathNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
-
-        // Lấy tất cả đoạn văn bản
-        $paragraphs = $xml->xpath('//w:p');
-        $lines = [];
-
-        if ($paragraphs) {
-            foreach ($paragraphs as $paragraph) {
-                $texts = $paragraph->xpath('.//w:t');
-                $line = '';
-                if ($texts) {
-                    foreach ($texts as $text) {
-                        $line .= (string)$text;
-                    }
-                }
-                if (trim($line) !== '') {
-                    $lines[] = trim($line);
-                }
-            }
-        }
-
-        if (empty($lines)) {
-            throw new Exception('File Word không có nội dung text');
-        }
-
-        // Parse lines thành câu hỏi
-        $questions = $this->parseWordLines($lines);
-
-        return $questions;
+private function parseWord($filePath, $defaultSubjectId = null, $defaultGrade = null)
+{
+    if (!class_exists('ZipArchive')) {
+        throw new Exception('ZipArchive không được cài đặt.');
     }
+
+    $zip = new ZipArchive();
+    if ($zip->open($filePath) !== true) {
+        throw new Exception('Không thể mở file .docx');
+    }
+
+    $content = $zip->getFromName('word/document.xml');
+    $zip->close();
+
+    if (!$content) {
+        throw new Exception('Không tìm thấy document.xml');
+    }
+
+    libxml_use_internal_errors(true);
+    $xml = simplexml_load_string($content);
+    if ($xml === false) {
+        throw new Exception('Lỗi parse XML');
+    }
+
+    $xml->registerXPathNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
+
+    $lines = [];
+    foreach ($xml->xpath('//w:p') as $p) {
+        $text = '';
+        foreach ($p->xpath('.//w:t') as $t) {
+            $text .= (string)$t;
+        }
+        if (trim($text) !== '') {
+            $lines[] = trim($text);
+        }
+    }
+
+    if (empty($lines)) {
+        throw new Exception('File Word không có nội dung');
+    }
+
+    // ❌ KHÔNG LẤY $_POST Ở ĐÂY
+    // ✅ DÙNG THAM SỐ TRUYỀN VÀO
+
+    return $this->parseWordLines($lines, $defaultSubjectId, $defaultGrade);
+}
+
 
     /**
      * Parse các dòng text từ Word thành câu hỏi
@@ -327,132 +326,77 @@ class QuestionController
      * HOẶC định dạng dạng bảng (tab-separated):
      * Câu hỏi [TAB] A [TAB] B [TAB] C [TAB] D [TAB] Đáp án [TAB] Môn [TAB] Lớp [TAB] Độ khó
      */
-    private function parseWordLines($lines)
-    {
-        $questions = [];
-        $currentQuestion = [];
-        $i = 0;
+private function parseWordLines($lines, $defaultSubjectId, $defaultGrade)
+{
+    $questions = [];
+    $i = 0;
 
-        while ($i < count($lines)) {
-            $line = trim($lines[$i]);
+    while ($i < count($lines)) {
 
-            // Bỏ qua dòng trống hoặc dòng tiêu đề
-            if (
-                empty($line) ||
-                stripos($line, 'câu hỏi') !== false && stripos($line, 'đáp án') !== false
-            ) {
-                $i++;
-                continue;
-            }
+        // 1. Lấy câu hỏi
+        $questionText = trim($lines[$i]);
 
-            // Kiểm tra định dạng tab-separated (1 dòng = 1 câu hỏi)
-            if (strpos($line, "\t") !== false) {
-                $parts = explode("\t", $line);
-                if (count($parts) >= 9) {
-                    $questions[] = $this->createQuestionFromParts($parts);
-                    $i++;
-                    continue;
-                }
-            }
-
-            // Kiểm tra định dạng có dấu | (pipe)
-            if (strpos($line, '|') !== false && count(explode('|', $line)) >= 9) {
-                $parts = array_map('trim', explode('|', $line));
-                $questions[] = $this->createQuestionFromParts($parts);
-                $i++;
-                continue;
-            }
-
-            // Định dạng nhiều dòng (từng câu hỏi chiếm nhiều dòng)
-            $currentQuestion['content'] = $line;
+        if (preg_match('/^(A\.|B\.|C\.|D\.|Đáp án)/ui', $questionText)) {
             $i++;
-
-            // Đọc 4 đáp án
-            $options = [];
-            for ($j = 0; $j < 4 && $i < count($lines); $j++) {
-                $optLine = trim($lines[$i]);
-                // Loại bỏ A., B., C., D. ở đầu
-                $optLine = preg_replace('/^[A-D][\.\)\:]\s*/i', '', $optLine);
-                $options[] = $optLine;
-                $i++;
-            }
-
-            if (count($options) < 4) {
-                continue; // Không đủ đáp án, bỏ qua
-            }
-
-            $currentQuestion['optionA'] = $options[0];
-            $currentQuestion['optionB'] = $options[1];
-            $currentQuestion['optionC'] = $options[2];
-            $currentQuestion['optionD'] = $options[3];
-
-            // Đọc đáp án đúng
-            if ($i < count($lines)) {
-                $answerLine = trim($lines[$i]);
-                // Tìm pattern: "Đáp án: X" hoặc "ĐA: X" hoặc "DA: X"
-                if (preg_match('/(đáp\s*án|đa|da)\s*[:：]?\s*([A-D])/ui', $answerLine, $matches)) {
-                    $correctLetter = strtoupper($matches[2]);
-                    $answerMap = ['A' => $options[0], 'B' => $options[1], 'C' => $options[2], 'D' => $options[3]];
-                    $currentQuestion['correctAnswer'] = $answerMap[$correctLetter];
-                    $i++;
-                } else {
-                    continue; // Không tìm thấy đáp án, bỏ qua câu hỏi này
-                }
-            }
-
-            // Đọc thông tin môn, lớp, độ khó
-            $metadata = ['subjectId' => null, 'gradeLevel' => null, 'difficultyLevel' => null];
-
-            // Kiểm tra 1-3 dòng tiếp theo để tìm metadata
-            for ($k = 0; $k < 3 && $i < count($lines); $k++) {
-                $metaLine = trim($lines[$i]);
-
-                if (empty($metaLine)) {
-                    break; // Dòng trống = kết thúc câu hỏi
-                }
-
-                // Tìm môn học
-                if (preg_match('/môn\s*[:：]?\s*(\d+)/ui', $metaLine, $matches)) {
-                    $metadata['subjectId'] = (int)$matches[1];
-                }
-
-                // Tìm lớp
-                if (preg_match('/lớp\s*[:：]?\s*(\d+)/ui', $metaLine, $matches)) {
-                    $metadata['gradeLevel'] = (int)$matches[1];
-                }
-
-                // Tìm độ khó
-                if (preg_match('/độ\s*khó\s*[:：]?\s*(dễ|tb|khó)/ui', $metaLine, $matches)) {
-                    $metadata['difficultyLevel'] = ucfirst(strtolower($matches[1]));
-                    if ($metadata['difficultyLevel'] === 'Tb') {
-                        $metadata['difficultyLevel'] = 'TB';
-                    }
-                }
-
-                $i++;
-
-                // Nếu đã đủ 3 thông tin thì dừng
-                if ($metadata['subjectId'] && $metadata['gradeLevel'] && $metadata['difficultyLevel']) {
-                    break;
-                }
-            }
-
-            // Kiểm tra đủ thông tin
-            if ($metadata['subjectId'] && $metadata['gradeLevel'] && $metadata['difficultyLevel']) {
-                $currentQuestion = array_merge($currentQuestion, $metadata);
-                $questions[] = $currentQuestion;
-            }
-
-            $currentQuestion = [];
+            continue;
         }
 
-        return $questions;
+        $currentQuestion = [
+            'content'   => $questionText,
+            'subjectId' => $defaultSubjectId,
+            'gradeLevel'=> $defaultGrade
+        ];
+
+        $i++;
+
+        // 2. Lấy 4 đáp án
+        $options = [];
+        for ($j = 0; $j < 4 && $i < count($lines); $j++, $i++) {
+            $opt = preg_replace('/^[A-D][\.\)\:]\s*/i', '', trim($lines[$i]));
+            $options[] = $opt;
+        }
+
+        if (count($options) < 4) {
+            continue;
+        }
+
+        $currentQuestion['optionA'] = $options[0];
+        $currentQuestion['optionB'] = $options[1];
+        $currentQuestion['optionC'] = $options[2];
+        $currentQuestion['optionD'] = $options[3];
+
+        // 3. Đọc đáp án
+        if ($i < count($lines)) {
+            $answerLine = trim($lines[$i]);
+
+            if (preg_match('/(đáp\s*án|đa|da)\s*[:：]?\s*([A-D])/ui', $answerLine, $m)) {
+                $map = [
+                    'A' => $options[0],
+                    'B' => $options[1],
+                    'C' => $options[2],
+                    'D' => $options[3],
+                ];
+                $currentQuestion['correctAnswer'] = $map[strtoupper($m[2])];
+            } else {
+                $i++;
+                continue;
+            }
+            $i++;
+        }
+
+        // 4. Thêm câu hỏi
+        $questions[] = $currentQuestion;
     }
+
+    return $questions;
+}
+
 
     /**
      * Tạo câu hỏi từ mảng parts (tab hoặc pipe separated)
      */
-    private function createQuestionFromParts($parts)
+private function createQuestionFromParts($parts, $defaultSubjectId = null, $defaultGrade = null)
+
     {
         // Xử lý đáp án đúng
         $correctAnswer = trim($parts[5]);
@@ -466,17 +410,17 @@ class QuestionController
             $correctAnswer = $answerMap[strtoupper($correctAnswer)];
         }
 
-        return [
-            'content' => trim($parts[0]),
-            'optionA' => trim($parts[1]),
-            'optionB' => trim($parts[2]),
-            'optionC' => trim($parts[3]),
-            'optionD' => trim($parts[4]),
-            'correctAnswer' => $correctAnswer,
-            'subjectId' => (int)trim($parts[6]),
-            'gradeLevel' => (int)trim($parts[7]),
-            'difficultyLevel' => trim($parts[8])
-        ];
+            return [
+                'content' => trim($parts[0]),
+                'optionA' => trim($parts[1]),
+                'optionB' => trim($parts[2]),
+                'optionC' => trim($parts[3]),
+                'optionD' => trim($parts[4]),
+                'correctAnswer' => $correctAnswer,
+                'subjectId' => !empty($parts[6]) ? (int)$parts[6] : (int)$defaultSubjectId,
+                'gradeLevel' => !empty($parts[7]) ? (int)$parts[7] : (int)$defaultGrade,
+                'difficultyLevel' => trim($parts[8])
+            ];
     }
 
     /**
@@ -662,5 +606,82 @@ class QuestionController
 
     require ROOT_PATH . '/app/views/questions/error_detail.php';
 }
+private function calculateDifficulty($content, $subjectId)
+{
+    // L = số từ
+    $L = str_word_count(strip_tags($content));
+
+    // D = số dữ kiện tìm được theo môn
+    $stmt = $this->db->prepare("
+        SELECT FactText, Weight 
+        FROM SubjectFacts 
+        WHERE SubjectId = ?
+    ");
+    $stmt->execute([$subjectId]);
+    $facts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $D = 0;
+    foreach ($facts as $fact) {
+        if (stripos($content, $fact['FactText']) !== false) {
+            $D += ($fact['Weight'] ?? 1);
+        }
+    }
+
+    // hệ số thực nghiệm (bạn chỉnh thoải mái)
+    $a = 1;
+    $b = 1;
+
+    $score = ($a * $D + $b) > 0 ? $L / ($a * $D + $b) : $L;
+
+    // Map score → độ khó
+    if ($score <= 1.5) return 'Dễ';
+    if ($score <= 3) return 'TB';
+    return 'Khó';
+}
+public function previewDifficulty()
+{
+    $data = $this->questionModel->getDifficultyAnalysis();
+
+    foreach ($data as &$q) {
+        if ($q['AnswerCount'] < 5) {
+            $q['Suggested'] = null;
+            continue;
+        }
+
+        $rate = $q['CorrectRate'];
+
+        if ($rate >= 0.8) {
+            $q['Suggested'] = 'Dễ';
+        } elseif ($rate >= 0.5) {
+            $q['Suggested'] = 'TB';
+        } else {
+            $q['Suggested'] = 'Khó';
+        }
+    }
+
+    require 'app/views/question/previewDifficulty.php';
+}
+
+private function suggestDifficulty($rate)
+{
+    if ($rate >= 0.8) return 'Dễ';
+    if ($rate >= 0.4) return 'TB';
+    return 'Khó';
+}
+public function applyDifficulty()
+{
+    if (!isset($_POST['apply'])) {
+        header("Location: index.php?controller=question&action=previewDifficulty");
+        exit();
+    }
+
+    foreach ($_POST['apply'] as $questionId => $newLevel) {
+        $this->questionModel->updateDifficulty($questionId, $newLevel);
+    }
+
+    $_SESSION['import_success'] = 'Đã cập nhật độ khó các câu hỏi đã chọn';
+    header("Location: index.php?controller=question&action=index");
+}
+
 
 }

@@ -336,7 +336,36 @@ private function mapUserLevelToQuestionDifficulty(string $userLevel): array
         $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-    
+    public function getDifficultyAnalysis()
+{
+    $sql = "
+        SELECT
+            QuestionId,
+            Content,
+            DifficultyLevel,
+            AnswerCount,
+            CorrectCount,
+            CASE
+                WHEN AnswerCount = 0 THEN NULL
+                ELSE CorrectCount / AnswerCount
+            END AS CorrectRate
+        FROM questions
+    ";
+
+    return $this->db->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+}
+public function updateDifficulty($questionId, $newLevel)
+{
+    $stmt = $this->db->prepare("
+        UPDATE questions
+        SET DifficultyLevel = ?
+        WHERE QuestionId = ?
+    ");
+    return $stmt->execute([$newLevel, $questionId]);
+}
+
+
+
 }
     
 
