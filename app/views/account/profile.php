@@ -1,4 +1,23 @@
 <h2>Hồ sơ cá nhân</h2>
+<h3>Chi tiết câu hỏi</h3>
+
+<a href="index.php?controller=user&action=index"
+   style="
+        display:inline-block;
+        padding:8px 16px;
+        background:white;
+        border:2px solid #3498db;
+        color:#3498db;
+        border-radius:6px;
+        text-decoration:none;
+        margin-bottom:15px;
+        font-weight:bold;
+   "
+   onmouseover="this.style.background='#3498db'; this.style.color='white';"
+   onmouseout="this.style.background='white'; this.style.color='#3498db';"
+>
+    ⬅ Quay lại trang người dùng
+</a>
 
 <?php if (!empty($errors)): ?>
 <article class="contrast">
@@ -54,7 +73,7 @@
     </label>
 
     <button type="submit">Lưu thay đổi</button>
-    <a class="secondary" href="index.php?controller=account&action=logout">Đăng xuất</a>
+
     <a class="secondary" href="index.php?controller=quiz&action=history">
       📄 Lịch sử làm bài
     </a>

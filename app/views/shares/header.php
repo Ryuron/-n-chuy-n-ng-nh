@@ -11,14 +11,4 @@ if (!defined('ROOT_PATH')) die('No direct access');
 <style> .container{max-width:900px;margin:auto;padding:16px;} </style>
 </head>
 <body>
-<nav class="container">
-  <ul>
-    <li><strong><a href="index.php?controller=user&action=index">AQS</a></strong></li>
-  </ul>
-  <ul>
-    <!-- <li><a href="index.php?controller=account&action=login">Đăng nhập</a></li>
-    <li><a href="index.php?controller=account&action=register">Đăng ký</a></li> -->
-    <li><a href="index.php?controller=account&action=profile">Hồ sơ</a></li>
-  </ul>
-</nav>
-<main class="container">
+
